@@ -160,7 +160,8 @@ class CPU
   getter reg_i : UInt8 = 0u8         # Instruction Register
   getter reg_f : Flags = Flags::None # Flags Register
 
-  @control : MC = MC::None
+  getter control : MC = MC::None # Control word
+  getter mc_step : UInt8 = 0     # MicroCode step
 
   property address : UInt8 = 0u8 # Memory Address Register
   property ram : Slice(UInt8)
@@ -209,57 +210,81 @@ class CPU
     end
   end
 
+  # Fetch an instruction and increment the micro-code step
+  def set_instruction
+    # Set the control word from the micro-code step
+    instruction = ROM[@reg_i >> 4] # Fetch instruction from rom
+    @control = instruction[@mc_step]
+    @mc_step += 1
+    @mc_step %= 5
+  end
+
+  # Based on the control word, transfer into the bus
+  def bus_transfer
+    @bus = @program_counter if @control.co?    # program counter on the bus
+    @bus = @ram[@address] if @control.ro?      # Memory on the bus
+    @bus = @reg_a if @control.ao?              # A on the bus
+    @bus = @reg_i & 0b00001111 if @control.io? # Instruction on the bus (last 4 bits only)
+    @bus = self.reg_e if @control.eo?          # Sum on the bus
+  end
+
+  def latch_registers
+    # Counter enable increments the program counter on clock tick
+    @program_counter &+= 1 if @control.ce?
+    @reg_f = self.flags if @control.fi? # Latch flags
+  end
+
+  def bus_receive
+    @program_counter = @bus if @control.j?                   # Jump
+    @program_counter = @bus if @control.jc? && @reg_f.carry? # Conditional Jump on carry
+    @program_counter = @bus if @control.jz? && @reg_f.zero?  # Conditional jump on zero
+    @address = @bus if @control.mi?                          # Memory address in
+    @reg_i = @bus if @control.ii?                            # Instruction register in
+    @reg_a = @bus if @control.ai?                            # Register A in
+    @reg_b = @bus if @control.bi?                            # Register B in
+    @reg_o = @bus if @control.oi?                            # Output register in
+    @ram[@address] = @bus if @control.ri?                    # Ram in
+  end
+
   # The main loop
+  def run(&block)
+    until @control.hlt?
+      step
+      yield
+    end
+  end
+
   def run
     until @control.hlt?
-      5.times do |mc_step|
-        # Set the control word from the micro-code step
-        instruction = ROM[@reg_i >> 4] # Fetch instruction from rom
-        @control = instruction[mc_step]
+      step
+    end
+  end
 
-        @bus = @program_counter if @control.co?    # program counter on the bus
-        @bus = @ram[@address] if @control.ro?      # Memory on the bus
-        @bus = @reg_a if @control.ao?              # A on the bus
-        @bus = @reg_i & 0b00001111 if @control.io? # Instruction on the bus (last 4 bits only)
-        @bus = self.reg_e if @control.eo?          # Sum on the bus
+  def step
+    print_state if @verbose
+    set_instruction
+    bus_transfer
+    latch_registers
+    bus_receive
+  end
 
-        # Counter enable increments the program counter on clock tick
-        @program_counter &+= 1 if @control.ce?
+  def print_state
+    print @control.to_s.ljust(20)
+    print " > "
+    print "pc: %08b " % @program_counter
+    print "Bus: %08b " % @bus
+    print "Ram: %08b => %08b " % [@address, @ram[@address]]
+    print "a: %08b " % @reg_a
+    print "b: %08b " % @reg_b
+    print "sum: %08b " % self.reg_e
+    print "out: %08b " % @reg_o
+    print "flags: #{@reg_f}"
+    print "\n"
 
-        @reg_f = self.flags if @control.fi?    # Latch flags
-        @program_counter = @bus if @control.j? # Jump
-        @program_counter = @bus if @control.jc? && @reg_f.carry?
-        @program_counter = @bus if @control.jz? && @reg_f.zero?
-        @address = @bus if @control.mi? # Memory address in
-        @reg_i = @bus if @control.ii?   # Instruction register in
-        @reg_a = @bus if @control.ai?   # Register A in
-        @reg_b = @bus if @control.bi?   # Register B in
-        @reg_o = @bus if @control.oi?   # Output register in
-        puts @reg_o if @control.oi?
-        @ram[@address] = @bus if @control.ri? # Ram in
-
-        if @verbose
-          print @control.to_s.ljust(20)
-          print " > "
-          print "pc: %08b " % @program_counter
-          print "Bus: %08b " % @bus
-          print "Ram: %08b => %08b " % [@address, @ram[@address]]
-          print "a: %08b " % @reg_a
-          print "b: %08b " % @reg_b
-          print "sum: %08b " % self.reg_e
-          print "out: %08b " % @reg_o
-          print "flags: #{@reg_f}"
-          print "\n"
-
-          if mc_step == 1
-            puts "#{" ".rjust(20)} > Instr: %04b %04b : %s" % [
-              @reg_i >> 4, @reg_i & 0xFu8, CPU.dasm(@reg_i),
-            ]
-          end
-        end
-
-        break if @control.hlt?
-      end
+    if mc_step == 1
+      puts "#{" ".rjust(20)} > Instr: %04b %04b : %s" % [
+        @reg_i >> 4, @reg_i & 0xFu8, CPU.dasm(@reg_i),
+      ]
     end
   end
 end
