@@ -1,0 +1,9 @@
+loop:   out
+        lda :count
+        add :step
+        sta :count
+        jc :exit
+        jmp :loop
+exit:   hlt
+count:  0
+step:   3
