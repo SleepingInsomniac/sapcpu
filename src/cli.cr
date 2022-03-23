@@ -1,5 +1,6 @@
 require "option_parser"
 require "./cpu"
+require "./gui"
 
 NAME = "bemu"
 
@@ -15,6 +16,7 @@ options = {
 } of String => String | Bool
 
 command = Command::None
+delay_time = 0.0
 
 OptionParser.parse do |parser|
   parser.banner = "Usage: #{NAME} [arguments]"
@@ -42,6 +44,14 @@ OptionParser.parse do |parser|
 
     parser.on("-a", "--asm", "Assemble before running") do
       options["asm"] = true
+    end
+
+    parser.on("-g", "--gui", "Run with a gui") do
+      options["gui"] = true
+    end
+
+    parser.on("-d DELAY", "--delay DELAY", "Add a delay to each clock pulse (s)") do |delay|
+      delay_time = delay.to_f
     end
   end
 
@@ -110,7 +120,20 @@ when Command::Run
           CPU.new(bytes, options["verbose"].as(Bool))
         end
 
-  cpu.run
+  if options["gui"]?
+    gui = GUI.new(cpu)
+    gui.clear
+    gui.clear_scroll
+    cpu.run do
+      gui.show
+      gui.set_cursor(0, 0)
+      sleep delay_time
+    end
+    gui.set_cursor(0, 20)
+  else
+    cpu.run { sleep delay_time }
+    puts cpu.reg_o
+  end
 when Command::Disassemble
   bytes = read_bytes(input_path)
   bytes.each_with_index do |byte, i|
