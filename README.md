@@ -1,18 +1,17 @@
-# BE SAP-1 8-bit CPU Emulator
+# SAP 8-bit CPU Emulator
 
-Emulates the Breadboard "Simple As Possible" 8-bit CPU as outlined in Ben Eater's videos:
-https://youtube.com/playlist?list=PLowKtXNTBypGqImE405J2565dvjafglHU
+Emulates a version of the ["Simple As Possible"](https://en.wikipedia.org/wiki/Simple-As-Possible_computer) 8-bit CPU
 
 ## Installation
-
-Check out the releases for the executable
 
 #### macOS
 
 1. Install crystal: `brew install crystal`
 2. build the program: `shards build --release`
 
-## Usage
+The build will be placed in `bin`
+
+## CLI Usage
 
 Build a program:
 
@@ -39,6 +38,45 @@ Usage: bemu [arguments]
     dasm                             dis-assemble a binary
     run                              run a program
     -h, --help                       Show this help
+```
+
+## Instructions
+
+```
+  NOP -  No-op
+  LDA -  Load A
+  ADD -  Add A with memory
+  SUB -  Subtract A with memory
+  STA -  Store A to memory
+  LDI -  Load Immediate to A
+  JMP -  Jump to Immediate
+  JC  -  Jump on Carry
+  JZ  -  Jump on Zero
+  OUT -  Output                    (Prints to STDOUT)
+  HLT -  Halt execution            (Exits the emulator)
+```
+
+## CPU Layout
+
+```
+                    Bus
+ Memory Address     ●●●●●●●●           Prog Counter  RAM
+     ●●●● ⫦-------⫣ ⎪⎪⎪⎪⎪⎪⎪⎪ ⫦-------⫣ ●●●●●●●●      00: 00000000
+ $00                ⎪⎪⎪⎪⎪⎪⎪⎪           $00           01: 00000000
+ Memory Contents    ⎪⎪⎪⎪⎪⎪⎪⎪           A Register    02: 00000000
+ ●●●●●●●● ⫦-------⫣ ⎪⎪⎪⎪⎪⎪⎪⎪ ⫦-------⫣ ●●●●●●●●      03: 00000000
+ $00                ⎪⎪⎪⎪⎪⎪⎪⎪           000           04: 00000000
+ Instruction        ⎪⎪⎪⎪⎪⎪⎪⎪           Sum Register  05: 00000000
+ ●●●●●●●● ⫦-------⫣ ⎪⎪⎪⎪⎪⎪⎪⎪ ⫦-------⫣ ●●●●●●●●      06: 00000000
+ HLT                ⎪⎪⎪⎪⎪⎪⎪⎪           000           07: 00000000
+ Flags  MC Step     ⎪⎪⎪⎪⎪⎪⎪⎪           B Register    08: 00000000
+ ●●     ●●●         ⎪⎪⎪⎪⎪⎪⎪⎪ ⫦-------⫣ ●●●●●●●●
+ ZC                 ⎪⎪⎪⎪⎪⎪⎪⎪           000
+ Control Word       ⎪⎪⎪⎪⎪⎪⎪⎪           Output
+ ●●●●●●●●●●●●●●●●●● ⎪⎪⎪⎪⎪⎪⎪⎪ ⫦-------⫣ ●●●●●●●●
+ JJFJCCOBSEAAIIRRMH                    000
+ ZCI OEIIUOOIIOOIIL
+                  T
 ```
 
 ## Contributors

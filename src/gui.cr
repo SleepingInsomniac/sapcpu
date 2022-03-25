@@ -20,7 +20,11 @@ class GUI
   end
 
   def hide_cursor
-    @io.print "\033[8m"
+    @io.print "\033[?25l"
+  end
+
+  def show_cursor
+    @io.print "\033[?25h"
   end
 
   def draw_rect(x : Int, y : Int, w : Int, h : Int, color : Symbol = :dark_gray)
@@ -156,15 +160,25 @@ class GUI
 
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    disp r + 25, 2, "RAM".colorize(:black).back(:dark_gray)
+    disp r + 28, 2, "RAM".colorize(:black).back(:dark_gray)
     @cpu.ram.each_with_index do |byte, index|
-      str = "%02x: %08b  %s        " % [index, byte, CPU.dasm(byte)]
-      str = if @cpu.address == index
-              str.colorize(:red)
-            else
-              str.colorize(:dark_gray).mode(:dim)
-            end
+      str = "   %02x: %08b  %s        " % [index, byte, CPU.dasm(byte)]
+
+      str = str.colorize(:dark_gray).mode(:dim) unless @cpu.address == index
+
       disp r + 25, 3 + index, str
+
+      if @cpu.program_counter == index
+        disp r + 24, 3 + index, "㍶ ▶︎".colorize(:dark_gray).mode(:dim)
+      end
+
+      if @cpu.address == index
+        if @cpu.control.ri?
+          disp r + 25, 3 + index, " =>".colorize(:red)
+        elsif @cpu.control.ro?
+          disp r + 25, 3 + index, "<= ".colorize(:yellow)
+        end
+      end
     end
   end
 end

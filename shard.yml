@@ -1,11 +1,11 @@
-name: becpu
-version: 0.1.1
+name: sapcpu
+version: 0.1.2
 
 authors:
   - Alex Clink <alexclink@gmail.com>
 
 targets:
-  becpu:
+  sapcpu:
     main: src/cli.cr
 
 crystal: 1.3.2

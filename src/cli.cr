@@ -11,16 +11,14 @@ enum Command : UInt8
   Disassemble
 end
 
-options = {
-  "verbose" => false,
-} of String => String | Bool
-
+cpu_options : CPU::Options = CPU::Options::Output
+options = {} of String => String | Bool
 command = Command::None
 delay_time = 0.0
 
-OptionParser.parse do |parser|
+parser = OptionParser.parse do |parser|
   parser.banner = "Usage: #{NAME} [arguments]"
-  parser.on("-v", "--verbose", "Run verbosely") { options["verbose"] = true }
+  parser.on("-v", "--verbose", "Run verbosely") { cpu_options |= CPU::Options::Verbose }
 
   parser.on("build", "assemble a file") do
     parser.banner = "Usage: #{NAME} build [arguments]"
@@ -48,6 +46,8 @@ OptionParser.parse do |parser|
 
     parser.on("-g", "--gui", "Run with a gui") do
       options["gui"] = true
+      cpu_options &= ~CPU::Options::Verbose # Disable verbose output
+      cpu_options &= ~CPU::Options::Output  # Disable output to stdout
     end
 
     parser.on("-d DELAY", "--delay DELAY", "Add a delay to each clock pulse (s)") do |delay|
@@ -114,25 +114,32 @@ when Command::Build
   end
 when Command::Run
   cpu = if options["asm"]?
-          CPU.new(File.read(input_path), options["verbose"].as(Bool))
+          CPU.new(File.read(input_path), cpu_options)
         else
           bytes = read_bytes(input_path)
-          CPU.new(bytes, options["verbose"].as(Bool))
+          CPU.new(bytes, cpu_options)
         end
 
   if options["gui"]?
     gui = GUI.new(cpu)
+
+    Signal::INT.trap do
+      gui.show_cursor
+      exit
+    end
+
     gui.clear
     gui.clear_scroll
+    gui.hide_cursor
     cpu.run do
       gui.show
       gui.set_cursor(0, 0)
       sleep delay_time
     end
     gui.set_cursor(0, 20)
+    gui.show_cursor
   else
     cpu.run { sleep delay_time }
-    puts cpu.reg_o
   end
 when Command::Disassemble
   bytes = read_bytes(input_path)
@@ -140,6 +147,7 @@ when Command::Disassemble
     puts "%02x: %08b %s" % [i, byte, CPU.dasm(byte)]
   end
 else
-  STDERR.puts "No options received, run with -h for help"
+  STDERR.puts "No options received\n"
+  STDERR.puts parser
   exit(1)
 end

@@ -164,18 +164,29 @@ class CPU
   getter mc_step : UInt8 = 0     # MicroCode step
 
   property address : UInt8 = 0u8 # Memory Address Register
-  property ram : Slice(UInt8)
+  property ram : Bytes = Bytes.new(16, 0u8)
 
-  property verbose : Bool = false
+  @[Flags]
+  enum Options : UInt8
+    Verbose
+    Output
+  end
+
+  property options : Options = Options::Output
 
   # Initialize from un-assembled program
-  def initialize(prog : String, verbose = false)
-    initialize(CPU.assemble(prog), verbose)
+  def initialize(prog : String, options : Options? = nil)
+    initialize(CPU.assemble(prog), options)
   end
 
   # Initialize from assembled program
-  def initialize(@ram, @verbose = false)
-    if @verbose
+  def initialize(ram : Bytes, options : Options? = nil)
+    @options = options.not_nil! if options
+
+    # Transfer ram into known buffer size
+    ram.each_with_index { |v, i| @ram[i] = v }
+
+    if @options.verbose?
       @ram.each_with_index do |instr, line|
         puts "%02x: %08b %s" % [line, instr, CPU.dasm(instr)]
       end
@@ -201,7 +212,7 @@ class CPU
     flags
   end
 
-  # Sum register
+  # ALU
   def reg_e
     if @control.su?
       @reg_a &- @reg_b
@@ -219,7 +230,7 @@ class CPU
     @mc_step %= 5
   end
 
-  # Based on the control word, transfer into the bus
+  # Based on the control word, transfer data onto the bus
   def bus_transfer
     @bus = @program_counter if @control.co?    # program counter on the bus
     @bus = @ram[@address] if @control.ro?      # Memory on the bus
@@ -228,6 +239,7 @@ class CPU
     @bus = self.reg_e if @control.eo?          # Sum on the bus
   end
 
+  # Update the program counter, latch flags register
   def latch_registers
     # Counter enable increments the program counter on clock tick
     @program_counter &+= 1 if @control.ce?
@@ -261,11 +273,12 @@ class CPU
   end
 
   def step
-    print_state if @verbose
+    print_state if @options.verbose?
     set_instruction
     bus_transfer
     latch_registers
     bus_receive
+    puts @reg_o if @options.output? && @control.oi?
   end
 
   def print_state
@@ -281,7 +294,7 @@ class CPU
     print "flags: #{@reg_f}"
     print "\n"
 
-    if mc_step == 1
+    if @control.ii?
       puts "#{" ".rjust(20)} > Instr: %04b %04b : %s" % [
         @reg_i >> 4, @reg_i & 0xFu8, CPU.dasm(@reg_i),
       ]
