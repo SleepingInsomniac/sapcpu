@@ -16,19 +16,19 @@ The build will be placed in `bin`
 Build a program:
 
 ```zsh
-$ becpu build examples/multiply.asm -o a.out
+$ sapcpu build examples/multiply.asm -o a.out
 ```
 
 Run a program:
 
 ```zsh
-$ becpu run examples/multiply.eat
+$ sapcpu run examples/multiply.eat
 ```
 
 Run and build a program:
 
 ```zsh
-$ becpu run examples/multiply.asm -a
+$ sapcpu run examples/multiply.asm -a
 ```
 
 ```
