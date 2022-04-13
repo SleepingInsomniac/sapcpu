@@ -2,7 +2,7 @@ require "option_parser"
 require "./cpu"
 require "./gui"
 
-NAME = "bemu"
+NAME = "sapcpu"
 
 enum Command : UInt8
   None
@@ -147,7 +147,7 @@ when Command::Disassemble
     puts "%02x: %08b %s" % [i, byte, CPU.dasm(byte)]
   end
 else
-  STDERR.puts "No options received\n"
+  # STDERR.puts "No options received\n"
   STDERR.puts parser
   exit(1)
 end

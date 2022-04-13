@@ -75,7 +75,7 @@ class GUI
 
     # draw_rect 0, 0, 30, 20
     disp l, 2, "Memory Address".colorize(:black).back(:dark_gray)
-    disp l + 4, 3, register(@cpu.address, 4, :yellow).colorize.back(:black)
+    disp l, 3, register(@cpu.address, 8, :yellow)
     bus_connection(l + rs, 3, @cpu.control.mi?, !@cpu.control.mi?)
     disp l, 4, ("$%02x" % @cpu.address)
 

@@ -32,12 +32,28 @@ $ sapcpu run examples/multiply.asm -a
 ```
 
 ```
-Usage: bemu [arguments]
+Usage: sapcpu [arguments]
     -v, --verbose                    Run verbosely
     build                            assemble a file
     dasm                             dis-assemble a binary
     run                              run a program
     -h, --help                       Show this help
+
+Usage: sapcpu build [arguments]
+    -v, --verbose                    Run verbosely
+    -h, --help                       Show this help
+    -o NAME                          Output file name
+
+Usage: sapcpu dasm [arguments]
+    -v, --verbose                    Run verbosely
+    -h, --help                       Show this help
+
+Usage: sapcpu run [arguments]
+    -v, --verbose                    Run verbosely
+    -h, --help                       Show this help
+    -a, --asm                        Assemble before running
+    -g, --gui                        Run with a gui
+    -d DELAY, --delay DELAY          Add a delay to each clock pulse (s)
 ```
 
 ## Instructions
@@ -52,6 +68,7 @@ Usage: bemu [arguments]
   JMP -  Jump to Immediate
   JC  -  Jump on Carry
   JZ  -  Jump on Zero
+  ADI -  Add immediate
   OUT -  Output                    (Prints to STDOUT)
   HLT -  Halt execution            (Exits the emulator)
 ```

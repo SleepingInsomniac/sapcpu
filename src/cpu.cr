@@ -43,6 +43,7 @@ class CPU
   JMP = StaticArray[F1, F2, MC::IO | MC::J, MC::None, MC::None]                                  # Jump to Immediate
   JC  = StaticArray[F1, F2, MC::IO | MC::JC, MC::None, MC::None]                                 # Jump on Carry
   JZ  = StaticArray[F1, F2, MC::IO | MC::JZ, MC::None, MC::None]                                 # Jump on Zero
+  ADI = StaticArray[F1, F2, MC::IO | MC::BI, MC::EO | MC::AI | MC::FI, MC::None]                 # Add Immediate to A
   OUT = StaticArray[F1, F2, MC::AO | MC::OI, MC::None, MC::None]                                 # Output
   HLT = StaticArray[F1, F2, MC::HLT, MC::None, MC::None]                                         # Halt execution
 
@@ -57,7 +58,7 @@ class CPU
     JMP, # 0110
     JC,  # 0111
     JZ,  # 1000
-    NOP, # 1001
+    ADI, # 1001
     NOP, # 1010
     NOP, # 1011
     NOP, # 1100
@@ -77,6 +78,7 @@ class CPU
     when JMP then "JMP %0x" % (instr & 0xFu8)
     when JC  then "JC %0x" % (instr & 0xFu8)
     when JZ  then "JZ %0x" % (instr & 0xFu8)
+    when ADI then "ADI %0x" % (instr & 0xFu8)
     when OUT then "OUT"
     when HLT then "HLT"
     else
@@ -140,6 +142,7 @@ class CPU
              when "JMP" then JMP
              when "JC"  then JC
              when "JZ"  then JZ
+             when "ADI" then ADI
              when "OUT" then OUT
              when "HLT" then HLT
              end
