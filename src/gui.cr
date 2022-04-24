@@ -82,9 +82,9 @@ class GUI
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     disp l, 5, "Memory Contents".colorize(:black).back(:dark_gray)
-    disp l, 6, register(@cpu.ram[@cpu.address])
+    disp l, 6, register(@cpu.ram[@cpu.address % @cpu.ram.size])
     bus_connection(l + rs, 6, @cpu.control.ro? || @cpu.control.ri?, @cpu.control.ro?)
-    disp l, 7, ("$%02x" % @cpu.ram[@cpu.address])
+    disp l, 7, ("$%02x" % @cpu.ram[@cpu.address % @cpu.ram.size])
 
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

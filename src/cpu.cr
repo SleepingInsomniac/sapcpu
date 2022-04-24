@@ -1,4 +1,6 @@
 class CPU
+  class AssemblyError < Exception; end
+
   # Flags register values
   @[Flags]
   enum Flags : UInt8
@@ -27,6 +29,8 @@ class CPU
     FI  # Flags IN
     JC  # Jump Carry
     JZ  # Jump Zero
+    SR  # Shift right
+    SL  # Shift left
   end
 
   # Fetch instruction microcode
@@ -35,15 +39,19 @@ class CPU
 
   # Opcodes
   NOP = StaticArray[F1, F2, MC::None, MC::None, MC::None]                                        # No-op
-  LDA = StaticArray[F1, F2, MC::IO | MC::MI, MC::RO | MC::AI, MC::None]                          # Load A
+  LDA = StaticArray[F1, F2, MC::IO | MC::MI, MC::RO | MC::AI, MC::None]                          # Load A with memory
   ADD = StaticArray[F1, F2, MC::IO | MC::MI, MC::RO | MC::BI, MC::EO | MC::AI | MC::FI]          # Add A with memory
   SUB = StaticArray[F1, F2, MC::IO | MC::MI, MC::RO | MC::BI, MC::EO | MC::AI | MC::SU | MC::FI] # Subtract A with memory
   STA = StaticArray[F1, F2, MC::IO | MC::MI, MC::AO | MC::RI, MC::None]                          # Store A to memory
   LDI = StaticArray[F1, F2, MC::IO | MC::AI, MC::None, MC::None]                                 # Load Immediate to A
   JMP = StaticArray[F1, F2, MC::IO | MC::J, MC::None, MC::None]                                  # Jump to Immediate
-  JC  = StaticArray[F1, F2, MC::IO | MC::JC, MC::None, MC::None]                                 # Jump on Carry
-  JZ  = StaticArray[F1, F2, MC::IO | MC::JZ, MC::None, MC::None]                                 # Jump on Zero
+  JC  = StaticArray[F1, F2, MC::IO | MC::JC, MC::None, MC::None]                                 # Jump on Carry flag set
+  JZ  = StaticArray[F1, F2, MC::IO | MC::JZ, MC::None, MC::None]                                 # Jump on Zero flag set
   ADI = StaticArray[F1, F2, MC::IO | MC::BI, MC::EO | MC::AI | MC::FI, MC::None]                 # Add Immediate to A
+  JPA = StaticArray[F1, F2, MC::AO | MC::J, MC::None, MC::None]                                  # Jump to A
+  CMP = StaticArray[F1, F2, MC::IO | MC::MI, MC::RO | MC::BI | MC::SU | MC::FI, MC::None]        # Compare A with memory
+  LSR = StaticArray[F1, F2, MC::SR | MC::FI, MC::None, MC::None]                                 # Logical Shift Right (A)
+  SBI = StaticArray[F1, F2, MC::IO | MC::BI, MC::EO | MC::SU | MC::AI | MC::FI, MC::None]        # Subtract Immediate from A
   OUT = StaticArray[F1, F2, MC::AO | MC::OI, MC::None, MC::None]                                 # Output
   HLT = StaticArray[F1, F2, MC::HLT, MC::None, MC::None]                                         # Halt execution
 
@@ -59,10 +67,10 @@ class CPU
     JC,  # 0111
     JZ,  # 1000
     ADI, # 1001
-    NOP, # 1010
-    NOP, # 1011
-    NOP, # 1100
-    NOP, # 1101
+    JPA, # 1010
+    CMP, # 1011
+    LSR, # 1100
+    SBI, # 1101
     OUT, # 1110
     HLT, # 1111
   ]
@@ -79,6 +87,10 @@ class CPU
     when JC  then "JC %0x" % (instr & 0xFu8)
     when JZ  then "JZ %0x" % (instr & 0xFu8)
     when ADI then "ADI %0x" % (instr & 0xFu8)
+    when JPA then "JPA"
+    when CMP then "CMP %0x" % (instr & 0xFu8)
+    when LSR then "LSR"
+    when SBI then "SBI %0x" % (instr & 0xFu8)
     when OUT then "OUT"
     when HLT then "HLT"
     else
@@ -86,14 +98,16 @@ class CPU
     end
   end
 
-  LABEL_REGEX = /^(?<label>[a-z]+)\:/i
-  SYM_REGEX   = /\:(?<label>[a-z]+)/i
+  LABEL_REGEX = /^(?<label>[a-z\_\d]+)\:/i
+  SYM_REGEX   = /\:(?<label>[a-z\_\d]+)/i
 
   # Assemble a program
   def self.assemble(prog : String)
     labels = {} of String => Int32
     # Get rid of whitespace and comments
     lines = prog.lines.map(&.gsub(/\;.+/, "")).map(&.strip).reject(&.blank?)
+    # Move labels to the same line
+    lines = lines.join("\n").gsub(/\:\n/, ": ").lines
 
     # Parse for labels
     lines = lines.map_with_index do |line, index|
@@ -123,7 +137,7 @@ class CPU
 
   # Assemble instruction
   def self.asm(line : String)
-    op = line.strip.split(' ')
+    op = line.strip.split(/\s+/)
     mnuemonic = op[0]
 
     oprand = if val = op[1]?
@@ -143,6 +157,10 @@ class CPU
              when "JC"  then JC
              when "JZ"  then JZ
              when "ADI" then ADI
+             when "JPA" then JPA
+             when "CMP" then CMP
+             when "LSR" then LSR
+             when "SBI" then SBI
              when "OUT" then OUT
              when "HLT" then HLT
              end
@@ -186,8 +204,13 @@ class CPU
   def initialize(ram : Bytes, options : Options? = nil)
     @options = options.not_nil! if options
 
-    # Transfer ram into known buffer size
-    ram.each_with_index { |v, i| @ram[i] = v }
+    if ram.size < 16
+      # Transfer ram into known buffer size
+      ram.each_with_index { |v, i| @ram[i] = v }
+    else
+      # Load all ram
+      @ram = ram
+    end
 
     if @options.verbose?
       @ram.each_with_index do |instr, line|
@@ -224,6 +247,10 @@ class CPU
     end
   end
 
+  # =============
+  # = Main loop =
+  # =============
+
   # Fetch an instruction and increment the micro-code step
   def set_instruction
     # Set the control word from the micro-code step
@@ -235,18 +262,13 @@ class CPU
 
   # Based on the control word, transfer data onto the bus
   def bus_transfer
-    @bus = @program_counter if @control.co?    # program counter on the bus
-    @bus = @ram[@address] if @control.ro?      # Memory on the bus
-    @bus = @reg_a if @control.ao?              # A on the bus
-    @bus = @reg_i & 0b00001111 if @control.io? # Instruction on the bus (last 4 bits only)
-    @bus = self.reg_e if @control.eo?          # Sum on the bus
-  end
-
-  # Update the program counter, latch flags register
-  def latch_registers
+    @bus = @program_counter if @control.co?           # program counter on the bus
+    @bus = @ram[@address % @ram.size] if @control.ro? # Memory on the bus
+    @bus = @reg_a if @control.ao?                     # A on the bus
+    @bus = @reg_i & 0b00001111 if @control.io?        # Instruction on the bus (last 4 bits only)
+    @bus = self.reg_e if @control.eo?                 # Sum on the bus
     # Counter enable increments the program counter on clock tick
     @program_counter &+= 1 if @control.ce?
-    @reg_f = self.flags if @control.fi? # Latch flags
   end
 
   def bus_receive
@@ -259,9 +281,24 @@ class CPU
     @reg_b = @bus if @control.bi?                            # Register B in
     @reg_o = @bus if @control.oi?                            # Output register in
     @ram[@address] = @bus if @control.ri?                    # Ram in
+    @reg_a >>= 1 if @control.sr?                             # Logical shift right
+    # Lastly, latch flags
+    @reg_f = self.flags if @control.fi? # Latch flags
   end
 
-  # The main loop
+  def step
+    print_state if @options.verbose?
+    set_instruction
+    bus_transfer
+    bus_receive
+    puts @reg_o if @options.output? && @control.oi?
+  end
+
+  # =================
+  # = End main loop =
+  # =================
+
+  # Run the main loop
   def run(&block)
     until @control.hlt?
       step
@@ -275,21 +312,12 @@ class CPU
     end
   end
 
-  def step
-    print_state if @options.verbose?
-    set_instruction
-    bus_transfer
-    latch_registers
-    bus_receive
-    puts @reg_o if @options.output? && @control.oi?
-  end
-
   def print_state
     print @control.to_s.ljust(20)
     print " > "
     print "pc: %08b " % @program_counter
     print "Bus: %08b " % @bus
-    print "Ram: %08b => %08b " % [@address, @ram[@address]]
+    print "Ram: %08b => %08b " % [@address, @ram[@address % @ram.size]]
     print "a: %08b " % @reg_a
     print "b: %08b " % @reg_b
     print "sum: %08b " % self.reg_e

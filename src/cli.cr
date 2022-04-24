@@ -99,7 +99,12 @@ end
 case command
 when Command::Build
   prog = File.read(input_path)
-  assembly = CPU.assemble(prog)
+  assembly = begin
+    CPU.assemble(prog)
+  rescue error : CPU::AssemblyError
+    puts error.message
+    exit 1
+  end
 
   if out_path = options["output"]?
     File.open(out_path.as(String), "wb") do |f|
@@ -114,7 +119,12 @@ when Command::Build
   end
 when Command::Run
   cpu = if options["asm"]?
-          CPU.new(File.read(input_path), cpu_options)
+          begin
+            CPU.new(File.read(input_path), cpu_options)
+          rescue error : CPU::AssemblyError
+            puts error.message
+            exit 1
+          end
         else
           bytes = read_bytes(input_path)
           CPU.new(bytes, cpu_options)
